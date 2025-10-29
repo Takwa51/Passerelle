@@ -1,0 +1,42 @@
+Cet ordre d’apparition (WiFi, puis 4 BLE, puis 3 LoRa, puis encore WiFi…) dans le terminal de la passerelle dépend de plusieurs facteurs, et ce n’est pas uniquement lié à la boucle principale. Voici en détail pourquoi ce comportement se produit :
+
+1. Boucle événementielle = ordre d’arrivée réel
+La boucle événementielle (select) traite les données dès qu’elles sont disponibles.
+Donc, l’ordre d’affichage reflète l’ordre dans lequel les données sont réellement reçues par la passerelle, indépendamment du protocole.
+
+2. BLE fonctionne via callback, pas dans select
+Dans ton code, BLE utilise un callback :
+
+Quand le client BLE écrit, la fonction chr1_handler est appelée immédiatement, en dehors de la boucle select.
+Si plusieurs écritures BLE arrivent rapidement, elles sont toutes traitées et affichées, même si la boucle principale n’a pas encore traité d’autres protocoles.
+3. WiFi et LoRa sont dans la boucle select
+WiFi (TCP) et LoRa sont surveillés par la boucle select.
+Si un message WiFi arrive, il s’affiche dès que la boucle le détecte.
+Si ensuite, il y a un "trou" (personne n’écrit sur TCP), alors les messages BLE et LoRa (qui arrivent via d'autres mécanismes) peuvent s’enchaîner.
+4. Explication du scénario observé
+Tu as eu d’abord un message WiFi → affiché.
+Ensuite, plusieurs messages BLE sont arrivés (par des écritures successives d’un client sur la caractéristique BLE) → ils s’affichent directement grâce au callback.
+Entre-temps, des messages LoRa sont arrivés (réception radio), la boucle les a lus et affichés.
+Puis encore du BLE, puis LoRa, puis à nouveau WiFi (quand un client TCP se reconnecte ou envoie un nouveau message).
+L’ordre dépend donc :
+
+De l’ordre réel d’arrivée des messages sur chaque protocole,
+Du fait que BLE n’est pas dans la boucle select, il s’affiche dès que reçu,
+Que WiFi et LoRa sont lus dès leur détection par select,
+Des éventuels délais côté capteurs/clients (par exemple, si le client WiFi attend plus longtemps avant d’envoyer).
+5. Ce n’est pas un bug, c’est le fonctionnement attendu
+La passerelle affiche simplement ce qu’elle reçoit, dans l’ordre réel d’arrivée.
+Si tu vois beaucoup de BLE, c’est probablement que le client BLE écrit très vite (plus vite que WiFi/LoRa).
+Si tu veux contrôler l’ordre, il faudrait synchroniser les émissions côté capteurs, mais ce n’est généralement pas utile : le rôle de la passerelle est de traiter chaque message dès qu’il arrive, indépendamment de la source.
+6. Résumé visuel
+Code
+[Client WiFi]   ----> [Passerelle] (affiche WiFi)
+[Client BLE]    -->  [Passerelle] (affiche BLE)
+[Client BLE]    -->  [Passerelle] (affiche BLE)
+[Client LoRa]   -->  [Passerelle] (affiche LoRa)
+...
+L’ordre d’arrivée = l’ordre d’affichage.
+7. Conclusion
+Ce comportement est normal et attendu avec ton architecture.
+Cela ne vient pas d’un bug de la boucle principale, mais de la nature « asynchrone » des protocoles : chaque message est traité dès son arrivée, sans blocage.
+Si tu fais des tests avec des capteurs qui émettent à des rythmes différents, tu verras d’autres ordres d’affichage.
