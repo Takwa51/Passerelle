@@ -83,5 +83,3 @@ Installez les bibliothèques nécessaires (si applicable).
 Utilisation
 Assurez-vous que tous les dispositifs sont alimentés et connectés au même réseau. Exécutez d'abord le serveur, puis les clients correspondants (LoRa, BLE, Wi-Fi) pour commencer à recevoir et envoyer des données.
 
-Auteurs
-Rezgui Samar
